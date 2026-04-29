@@ -61,6 +61,36 @@ input:focus,select:focus{outline:none;border-color:#E4007C;box-shadow:0 0 0 2px 
 .dnl:hover{background:#2a3d84}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
+/* Appendix */
+.apx-section{padding:20px 0;border-bottom:1px solid #f0f1f5}
+.apx-h3{font-size:14px;font-weight:700;color:#1D2B5F;margin-bottom:10px}
+.apx-intro{font-size:13px;color:#444;line-height:1.65;margin-bottom:14px}
+.apx-list{font-size:13px;color:#444;line-height:1.7;padding-left:18px;margin-top:4px}
+.apx-list li{margin-bottom:2px}
+.apx-note{font-size:12px;color:#666;background:#f5f6fa;border-left:3px solid #1D2B5F;padding:8px 12px;border-radius:0 4px 4px 0;margin-top:14px}
+.conf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.conf-box{border-radius:6px;padding:14px;border:1px solid #e0e2ea}
+.conf-high{border-top:3px solid #27ae60;background:#f9fffc}
+.conf-med{border-top:3px solid #f39c12;background:#fffdf5}
+.conf-low{border-top:3px solid #e74c3c;background:#fff9f8}
+.conf-badge{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+.conf-high .conf-badge{color:#27ae60}
+.conf-med .conf-badge{color:#c87800}
+.conf-low .conf-badge{color:#e74c3c}
+.conf-meaning{font-size:12px;color:#555;margin-top:10px;padding-top:8px;border-top:1px solid #e8eaf0;line-height:1.5}
+.tab-explain-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tab-explain{border-radius:6px;overflow:hidden;border:1px solid #e0e2ea}
+.tab-explain-hdr{color:#fff;font-size:13px;font-weight:700;padding:10px 14px}
+.tab-explain-body{padding:14px;font-size:13px;color:#444;line-height:1.65}
+.tab-explain-body code{background:#f0f1f5;padding:2px 5px;border-radius:3px;font-size:11px;font-family:monospace}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f0f1f5}
+.step:last-child{border-bottom:none}
+.step-num{width:28px;height:28px;min-width:28px;background:#E4007C;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:1px}
+.step-body{font-size:13px;color:#444;line-height:1.65}
+.step-body strong{color:#1D2B5F;font-size:13px}
+.step-body p{margin-top:4px}
+@media(max-width:720px){.conf-grid{grid-template-columns:1fr}.tab-explain-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -124,6 +154,100 @@ input:focus,select:focus{outline:none;border-color:#E4007C;box-shadow:0 0 0 2px 
     <button class="btn btn-gen" id="genBtn" onclick="runGenerate()">Generate Plan</button>
     <div id="out"></div>
   </div>
+
+  <!-- Appendix -->
+  <div class="card" id="appendixCard">
+    <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center" onclick="toggleAppendix()">
+      Appendix &amp; Terminology Guide
+      <span id="appendixChevron" style="font-size:18px;font-weight:400;color:#E4007C;transition:transform .25s">&#9660;</span>
+    </h2>
+    <div id="appendixBody" style="display:none">
+
+      <!-- Section 1: Confidence Scale -->
+      <div class="apx-section">
+        <h3 class="apx-h3">Confidence Scale</h3>
+        <p class="apx-intro">Every recommended part is given a confidence rating that reflects how much trust you should place in the calculated holding quantity. It is driven by three factors: how many transactions the rate is based on, how many models in your fleet use the part, and how well-represented those models are in the group-wide transaction history.</p>
+        <div class="conf-grid">
+          <div class="conf-box conf-high">
+            <div class="conf-badge">High</div>
+            <ul class="apx-list">
+              <li>10 or more issues recorded in source data</li>
+              <li>Part is used by 2 or more of the bus types in your planned fleet</li>
+              <li>Every contributing bus type has 3 or more distinct vehicles appearing in the transaction history</li>
+            </ul>
+            <p class="conf-meaning"><strong>What it means:</strong> The rate is statistically stable. You can stock to the recommended figure with confidence.</p>
+          </div>
+          <div class="conf-box conf-med">
+            <div class="conf-badge">Medium</div>
+            <ul class="apx-list">
+              <li>3–9 issues recorded, <em>or</em></li>
+              <li>Part is used by only 1 bus type in your fleet, <em>or</em></li>
+              <li>Some contributing bus types have a small active population (3–5 vehicles) in the data</li>
+            </ul>
+            <p class="conf-meaning"><strong>What it means:</strong> The direction is right but the precise number is less certain. Review alongside supplier minimums and engineer judgement.</p>
+          </div>
+          <div class="conf-box conf-low">
+            <div class="conf-badge">Low</div>
+            <ul class="apx-list">
+              <li>Fewer than 3 issues in the entire source dataset, <em>or</em></li>
+              <li>All contributing bus types have fewer than 3 vehicles in the transaction history</li>
+            </ul>
+            <p class="conf-meaning"><strong>What it means:</strong> Insufficient data to calculate a reliable rate. The part still appears in the output (and in the Confidence Flags sheet) so it gets manual review — it is never silently dropped.</p>
+          </div>
+        </div>
+        <p class="apx-note">&#9432; Low-confidence parts are always listed in the <strong>Confidence Flags</strong> sheet of the Excel output for manual review by an engineer or stores manager.</p>
+      </div>
+
+      <!-- Section 2: Day One vs Steady-State -->
+      <div class="apx-section">
+        <h3 class="apx-h3">Day One Pack vs Steady-State MIN/MAX</h3>
+        <p class="apx-intro">The workbook contains two separate stock recommendations because a new depot faces two very different problems at different points in time.</p>
+        <div class="tab-explain-grid">
+          <div class="tab-explain">
+            <div class="tab-explain-hdr" style="background:#1D2B5F">Sheet 1 &mdash; Day One Pack</div>
+            <div class="tab-explain-body">
+              <p><strong>The problem it solves:</strong> On the day the depot opens, there is no live consumption signal to react to. If a part runs out, there is no stock on order and no historical pattern to trigger a reorder. The risk of a bus going off-road for a missing part is at its highest.</p>
+              <p style="margin-top:10px"><strong>How the quantity is calculated:</strong></p>
+              <ul class="apx-list" style="margin-top:6px">
+                <li><strong>Monthly demand</strong> — covers the first full month of operation before reorder cycles stabilise</li>
+                <li><strong>Lead-time buffer</strong> — covers the parts that will be consumed while you wait for the first replenishment delivery</li>
+                <li><strong>Launch contingency (+50%)</strong> — an extra cushion for the unpredictable early weeks, where actual demand may spike or your ordering rhythm hasn't yet settled</li>
+              </ul>
+              <p style="margin-top:10px;font-size:12px;color:#888">Formula: <code>ceil( monthly + lead-time buffer + 0.5 &times; monthly )</code></p>
+              <p style="margin-top:8px"><strong>Age adjustment:</strong> If your fleet is newer or older than the group average, demand rates for wear items are scaled accordingly — newer fleets need less, older fleets need more.</p>
+            </div>
+          </div>
+          <div class="tab-explain">
+            <div class="tab-explain-hdr" style="background:#E4007C">Sheet 2 &mdash; Steady-State MIN/MAX</div>
+            <div class="tab-explain-body">
+              <p><strong>The problem it solves:</strong> Once the depot is bedded in and a normal ordering pattern is established, you switch from "launch mode" to routine replenishment. MIN/MAX is the standard reorder framework used across First Bus depots.</p>
+              <p style="margin-top:10px"><strong>MIN (reorder point):</strong> The stock level at which a replenishment order should be raised. Set to cover demand during one full lead time, plus a safety buffer — so the shelf never hits zero before the delivery arrives.</p>
+              <p style="margin-top:10px"><strong>MAX (order-up-to level):</strong> The quantity you order up to when replenishing. Set to MIN plus one month's expected demand, giving a natural reorder cycle of roughly one month.</p>
+              <p style="margin-top:10px;font-size:12px;color:#888">MIN = <code>ceil( daily demand &times; lead-time days &times; 1.5 )</code><br>MAX = <code>MIN + ceil( monthly demand )</code></p>
+              <p style="margin-top:8px"><strong>When to switch:</strong> Use Day One quantities to stock up before opening. Once you have 2–3 months of live consumption data, transition to the MIN/MAX figures for ongoing reordering.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: How the app works -->
+      <div class="apx-section" style="border-bottom:none;padding-bottom:0">
+        <h3 class="apx-h3">How the App Works — Step by Step</h3>
+        <p class="apx-intro">The tool processes two reference files and applies a validated calculation pipeline to produce stock recommendations tailored to your specific fleet mix and age profile.</p>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Fleet reference file</strong><p>Loaded once. Maps every individual vehicle fleet number to its bus type (chassis variant). This is used to resolve which bus type a transaction belongs to. A 3-digit prefix fallback is also built automatically — for vehicles that appear in the transaction history but not in the regional fleet reference (e.g. buses from other First Bus regions), the first 3 digits of the fleet number are used to infer the bus type from the most common model for that prefix.</p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Transaction history file</strong><p>The source consumption dataset — a group-wide HxGN EAM export of all parts issues. Only <em>issue</em> transactions are used. Transactions with no fleet number are excluded (they cannot be attributed to a bus type). Transactions on non-bus vehicles (vans, forklifts, steam cleaners — identified by their fleet number prefix) are also excluded.</p><p style="margin-top:6px">Negative quantity rows (stocktake adjustments) are included at their absolute value — they represent real consumption that was only discovered when stock was counted, not at the point of issue.</p></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Per-bus demand rates</strong><p>For each combination of part and bus type, the total quantity issued is divided by the number of distinct vehicles of that type that appear anywhere in the transaction history. This gives a <em>per-bus-per-year</em> consumption rate. Using the active population from the transaction history (rather than the regional fleet count) avoids overstating rates — group-wide consumption is divided by a group-wide denominator.</p></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Scaling to your fleet</strong><p>The per-bus rate for each bus type is multiplied by the quantity of that type you plan to operate. If you are running multiple bus types, contributions from each are summed to give a total annual demand for the part across your whole fleet.</p></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-body"><strong>Age weighting</strong><p>Parts are classified by material group into three categories: <em>consumables</em> (filters, bulbs, fuses — minimal age effect), <em>scheduled service items</em> (oils, coolants — minimal age effect), and <em>wear items</em> (clutches, alternators, body panels — significant age effect). For wear items, a multiplier is applied based on the average age you entered for your fleet: newer fleets use less, older fleets use more. The source transaction data represents a mixed-age group fleet (baseline = 1.0 at 6–9 years average age).</p></div></div>
+          <div class="step"><div class="step-num">6</div><div class="step-body"><strong>Day One and MIN/MAX calculation</strong><p>The formulas described in the section above are applied to each part's total annual demand figure, using the lead time you entered. Results are rounded up to whole units — you cannot hold a fraction of a part.</p></div></div>
+          <div class="step"><div class="step-num">7</div><div class="step-body"><strong>Confidence scoring &amp; Excel export</strong><p>Each part is assigned a confidence rating (see above). The results are written to a three-sheet Excel workbook: the Day One Pack, the Steady-State MIN/MAX, and the Confidence Flags sheet listing every low-confidence part for manual review. The file downloads directly from the browser — no data is sent to any server.</p></div></div>
+        </div>
+      </div>
+
+    </div><!-- /appendixBody -->
+  </div><!-- /appendixCard -->
+
 
 </div>
 <script>
@@ -489,6 +613,16 @@ function makeWorkbook(res) {
   ), 'Confidence Flags');
 
   return wb;
+}
+
+// ── Appendix toggle ───────────────────────────────────────────────────────────
+
+function toggleAppendix() {
+  const body = document.getElementById('appendixBody');
+  const chev = document.getElementById('appendixChevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chev.style.transform = open ? 'rotate(180deg)' : '';
 }
 </script>
 </body>
