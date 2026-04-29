@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depot Startup MRP</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:14px;background:#f0f2f5;color:#2c3e50}
+.hdr{background:#1a3a5c;color:#fff;padding:14px 24px}
+.hdr h1{font-size:20px;font-weight:700}
+.hdr p{font-size:12px;opacity:.75;margin-top:3px}
+.wrap{max-width:1100px;margin:20px auto;padding:0 16px}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.card h2{font-size:14px;font-weight:700;color:#1a3a5c;border-bottom:2px solid #e8ecf0;padding-bottom:8px;margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ubox{border:2px dashed #c8d0d8;border-radius:6px;padding:16px;text-align:center;transition:border-color .2s}
+.ubox.ok{border-color:#27ae60;background:#f0faf4}
+.ubox.err{border-color:#e74c3c;background:#fef0ee}
+.ubox strong{display:block;margin-bottom:6px;font-size:13px}
+.ubox input[type=file]{display:none}
+.ubtn{display:inline-block;background:#1a3a5c;color:#fff;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px}
+.ubtn:hover{background:#254d7a}
+.ustat{font-size:12px;margin-top:6px;color:#666;min-height:18px}
+.ustat.ok{color:#27ae60}
+.ustat.err{color:#e74c3c}
+table{width:100%;border-collapse:collapse}
+th{background:#f0f3f7;text-align:left;padding:8px 10px;font-size:12px;font-weight:700;color:#1a3a5c;border-bottom:2px solid #dde2e8;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #edf0f3;font-size:13px;vertical-align:middle}
+tr:hover td{background:#fafbfc}
+input[type=number],select{border:1px solid #c8d0d8;border-radius:4px;padding:5px 7px;font-size:13px;width:100%;font-family:Arial,sans-serif}
+input:focus,select:focus{outline:none;border-color:#1a3a5c}
+.btn{padding:7px 16px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-family:Arial,sans-serif;font-weight:600}
+.btn-add{background:#27ae60;color:#fff}
+.btn-add:hover{background:#219a52}
+.btn-del{background:#e74c3c;color:#fff;padding:4px 10px;font-size:12px}
+.btn-del:hover{background:#c0392b}
+.btn-gen{background:#e67e22;color:#fff;font-size:15px;padding:12px 0;width:100%;margin-top:10px;border-radius:6px}
+.btn-gen:hover{background:#ca6f1e}
+.btn-gen:disabled{background:#b5924d;cursor:not-allowed}
+.lt-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.lt-row label{font-weight:700;font-size:13px;white-space:nowrap}
+.lt-row input{width:80px}
+.ftotal{text-align:right;font-size:12px;color:#666;margin-top:8px}
+.ftotal strong{color:#1a3a5c;font-size:14px}
+.verr{color:#e74c3c;font-size:12px;margin-top:6px}
+.status{padding:12px 16px;border-radius:6px;font-size:13px;margin-top:14px;line-height:1.6}
+.status.info{background:#eaf4ff;color:#1a3a5c;border-left:4px solid #2980b9}
+.status.ok{background:#f0faf4;color:#1a6b3a;border-left:4px solid #27ae60}
+.status.err{background:#fef0ee;color:#a93226;border-left:4px solid #e74c3c}
+.dnl{display:inline-block;margin-top:10px;background:#1a3a5c;color:#fff;padding:9px 20px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:600}
+.dnl:hover{background:#254d7a}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Depot Startup MRP</h1>
+  <p>Day One stock planning for new bus depots</p>
+</div>
+<div class="wrap">
+
+  <div class="card">
+    <h2>Reference Data</h2>
+    <div class="grid2">
+      <div class="ubox" id="fleetBox">
+        <strong>Fleet Reference File</strong>
+        <div style="font-size:12px;color:#888">Fleet number &rarr; model mapping CSV</div>
+        <label class="ubtn" for="fleetFile">Choose CSV</label>
+        <input type="file" id="fleetFile" accept=".csv">
+        <div class="ustat" id="fleetStat">No file loaded</div>
+      </div>
+      <div class="ubox" id="txnBox">
+        <strong>Transaction History</strong>
+        <div style="font-size:12px;color:#888">HxGN EAM issues export CSV</div>
+        <label class="ubtn" for="txnFile">Choose CSV</label>
+        <input type="file" id="txnFile" accept=".csv">
+        <div class="ustat" id="txnStat">No file loaded</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Depot Builder</h2>
+    <div class="lt-row">
+      <label for="leadTime">Lead Time (days):</label>
+      <input type="number" id="leadTime" value="5" min="1" max="365">
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:52%">Bus Type</th>
+          <th style="width:18%">Quantity</th>
+          <th style="width:22%">Avg Age (yrs)</th>
+          <th style="width:8%"></th>
+        </tr>
+      </thead>
+      <tbody id="fleetBody"></tbody>
+    </table>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="btn btn-add" onclick="addRow()">+ Add Row</button>
+      <div class="ftotal">Total fleet: <strong id="totalBuses">0</strong> buses</div>
+    </div>
+    <div class="verr" id="verr"></div>
+    <button class="btn btn-gen" id="genBtn" onclick="runGenerate()">Generate Plan</button>
+    <div id="out"></div>
+  </div>
+
+</div>
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+
+const NON_BUS = new Set(['905','907','908','909','930','932','933','934','935',
+  '936','940','960','962','965','970','971','990']);
+
+const AGE_CURVE = [
+  {max:2,  w:0.5},
+  {max:5,  w:0.8},
+  {max:9,  w:1.0},
+  {max:14, w:1.3},
+  {max:999,w:1.6}
+];
+
+const CONSUMABLE_KW = ['filter','bulb','fuse','wiper','blade','bell push','seal','lamp','indicator'];
+const SCHEDULED_KW  = ['oil','coolant','antifreeze','fluid','grease','lubric','service kit'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let directMap  = new Map();
+let prefixMap  = new Map();
+let modelList  = [];
+let txnRows    = [];
+let txnCols    = null;
+let fleetReady = false;
+let txnReady   = false;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function col(headers, names) {
+  const n = h => h.replace(/[\s_\-]/g,'').toLowerCase();
+  for (const name of names) {
+    const f = headers.find(h => n(h) === n(name));
+    if (f) return f;
+  }
+  return null;
+}
+
+function classify(mtl) {
+  const d = (mtl||'').toLowerCase();
+  if (SCHEDULED_KW.some(k => d.includes(k)))  return 'scheduled';
+  if (CONSUMABLE_KW.some(k => d.includes(k))) return 'consumable';
+  return 'wear';
+}
+
+function ageWeight(cat, age) {
+  if (cat !== 'wear') return 1.0;
+  for (const r of AGE_CURVE) if (age <= r.max) return r.w;
+  return 1.6;
+}
+
+function resolveModel(fn) {
+  fn = String(fn||'').trim();
+  if (!fn) return null;
+  if (directMap.has(fn)) return directMap.get(fn);
+  const p = fn.slice(0,3);
+  if (NON_BUS.has(p)) return null;
+  return prefixMap.get(p) || null;
+}
+
+function setStat(id, msg, cls) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'ustat' + (cls ? ' '+cls : '');
+}
+
+// ── Fleet reference ───────────────────────────────────────────────────────────
+
+document.getElementById('fleetFile').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  Papa.parse(file, {header:true, skipEmptyLines:true, complete(res) {
+    const h = res.meta.fields || [];
+    const fnC  = col(h,['FleetNumber','Fleet','FleetNo','VehicleNumber','Vehicle']);
+    const mdC  = col(h,['Model','BusType','ChassisVariant','VehicleType','Type','Variant','BodyType']);
+    if (!fnC || !mdC) {
+      setStat('fleetStat','Column not found. Headers: '+h.join(', '),'err');
+      document.getElementById('fleetBox').className='ubox err';
+      return;
+    }
+    directMap = new Map();
+    const pc = {};
+    const ms = new Set();
+    for (const r of res.data) {
+      const fn = String(r[fnC]||'').trim();
+      const md = String(r[mdC]||'').trim();
+      if (!fn||!md) continue;
+      directMap.set(fn, md);
+      ms.add(md);
+      const p = fn.slice(0,3);
+      if (!pc[p]) pc[p]={};
+      pc[p][md] = (pc[p][md]||0)+1;
+    }
+    prefixMap = new Map();
+    for (const [p,counts] of Object.entries(pc)) {
+      if (NON_BUS.has(p)) continue;
+      const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+      prefixMap.set(p, best);
+    }
+    modelList = [...ms].sort();
+    fleetReady = true;
+    document.getElementById('fleetBox').className='ubox ok';
+    setStat('fleetStat',`✓ ${directMap.size} fleet numbers | ${modelList.length} models`,'ok');
+    document.querySelectorAll('.bsel').forEach(s => fillDropdown(s, s.value));
+  }});
+});
+
+// ── Transaction file ──────────────────────────────────────────────────────────
+
+document.getElementById('txnFile').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  setStat('txnStat','Parsing…','');
+  Papa.parse(file, {header:true, skipEmptyLines:true, dynamicTyping:false, complete(res) {
+    const h = res.meta.fields || [];
+    const ttC  = col(h,['TransactionType','TxnType','Type','IssueType']);
+    const qtC  = col(h,['TransactionQty','Qty','Quantity','TxnQty','IssuedQty']);
+    const fnC  = col(h,['FleetNumber','Fleet','FleetNo','VehicleNumber','Vehicle']);
+    const ptC  = col(h,['PartNumber','Part','PartNum','ItemNumber','StockCode','Code']);
+    const dsC  = col(h,['Description','PartDescription','PartDesc','ItemDescription','Descr']);
+    const mtC  = col(h,['MtlGroupDesc','MaterialGroup','MtlGroup','Category','MatGroup','MaterialGroupDescription']);
+    const dtC  = col(h,['TransactionDate','Date','TxnDate','IssuedDate','DateIssued']);
+    if (!ttC||!qtC||!ptC) {
+      setStat('txnStat','Missing required columns. Found: '+h.join(', '),'err');
+      document.getElementById('txnBox').className='ubox err';
+      return;
+    }
+    txnRows = res.data;
+    txnCols = {ttC,qtC,fnC,ptC,dsC,mtC,dtC};
+    txnReady = true;
+    document.getElementById('txnBox').className='ubox ok';
+    const parts = new Set(txnRows.map(r=>String(r[ptC]||'').trim()).filter(Boolean)).size;
+    const dates = dtC ? txnRows.map(r=>r[dtC]).filter(Boolean) : [];
+    const dr = dates.length ? dates[0]+' – '+dates[dates.length-1] : 'n/a';
+    setStat('txnStat',`✓ ${txnRows.length.toLocaleString()} rows | ${parts.toLocaleString()} parts | ${dr}`,'ok');
+  }});
+});
+
+// ── Fleet table UI ────────────────────────────────────────────────────────────
+
+function fillDropdown(sel, cur) {
+  sel.innerHTML = '<option value="">-- Select bus type --</option>';
+  for (const m of modelList) {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    if (m === cur) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+function addRow() {
+  const tb = document.getElementById('fleetBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select class="bsel" onchange="updateTotal()"><option value="">-- Select bus type --</option></select></td>
+    <td><input type="number" class="qinp" value="1" min="1" oninput="updateTotal()"></td>
+    <td><input type="number" class="ainp" value="5" min="0" step="0.5"></td>
+    <td><button class="btn btn-del" onclick="this.closest('tr').remove();updateTotal()">&#x2715;</button></td>`;
+  tb.appendChild(tr);
+  if (modelList.length) fillDropdown(tr.querySelector('.bsel'),'');
+  updateTotal();
+}
+
+function updateTotal() {
+  let t=0;
+  document.querySelectorAll('.qinp').forEach(i=>t+=parseInt(i.value)||0);
+  document.getElementById('totalBuses').textContent=t;
+}
+
+addRow();
+
+// ── Pipeline ──────────────────────────────────────────────────────────────────
+
+function runGenerate() {
+  document.getElementById('verr').textContent='';
+  const out = document.getElementById('out');
+  out.innerHTML='';
+  if (!fleetReady) { document.getElementById('verr').textContent='Upload fleet reference file first.'; return; }
+  if (!txnReady)   { document.getElementById('verr').textContent='Upload transaction history file first.'; return; }
+  const rows = [...document.querySelectorAll('#fleetBody tr')];
+  if (!rows.length) { document.getElementById('verr').textContent='Add at least one bus type row.'; return; }
+  const lt = parseInt(document.getElementById('leadTime').value)||5;
+  const userFleet=[];
+  for (const tr of rows) {
+    const md = tr.querySelector('.bsel').value;
+    const qty = parseInt(tr.querySelector('.qinp').value)||0;
+    const age = parseFloat(tr.querySelector('.ainp').value);
+    if (!md)       { document.getElementById('verr').textContent='Select a bus type for every row.'; return; }
+    if (qty<1)     { document.getElementById('verr').textContent='Quantity must be ≥ 1.'; return; }
+    if (isNaN(age)||age<0) { document.getElementById('verr').textContent='Age must be 0 or greater.'; return; }
+    userFleet.push({md,qty,age});
+  }
+  const btn = document.getElementById('genBtn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin"></span> Processing…';
+  out.innerHTML='<div class="status info">Processing — please wait…</div>';
+  setTimeout(()=>{
+    try {
+      const result = pipeline(userFleet, lt);
+      const wb = makeWorkbook(result);
+      const wbout = XLSX.write(wb,{bookType:'xlsx',type:'array'});
+      const url = URL.createObjectURL(new Blob([wbout],{type:'application/octet-stream'}));
+      const fname = 'DepotMRP_'+new Date().toISOString().slice(0,10)+'.xlsx';
+      const h = result.d1count, med = result.med, lo = result.lo;
+      out.innerHTML=`<div class="status ok">
+        ✓ Plan generated &mdash; <strong>${h+med+lo}</strong> parts<br>
+        High confidence: <strong>${result.hi}</strong> &nbsp;|&nbsp;
+        Medium: <strong>${med}</strong> &nbsp;|&nbsp;
+        Low: <strong>${lo}</strong><br>
+        <a class="dnl" href="${url}" download="${fname}">⬇ Download ${fname}</a>
+      </div>`;
+    } catch(e) {
+      out.innerHTML=`<div class="status err">Error: ${e.message}</div>`;
+      console.error(e);
+    }
+    btn.disabled=false;
+    btn.textContent='Generate Plan';
+  },60);
+}
+
+// ── Core calculation ──────────────────────────────────────────────────────────
+
+function pipeline(userFleet, ltDays) {
+  const {ttC,qtC,fnC,ptC,dsC,mtC} = txnCols;
+
+  // Active populations
+  const popSets={};
+  for (const r of txnRows) {
+    if (String(r[ttC]||'').trim().toUpperCase()!=='I') continue;
+    const fn = fnC ? String(r[fnC]||'').trim() : '';
+    if (!fn) continue;
+    const md = resolveModel(fn);
+    if (!md) continue;
+    if (!popSets[md]) popSets[md]=new Set();
+    popSets[md].add(fn);
+  }
+
+  // Demand aggregation
+  const dem={};
+  for (const r of txnRows) {
+    if (String(r[ttC]||'').trim().toUpperCase()!=='I') continue;
+    const fn = fnC ? String(r[fnC]||'').trim() : '';
+    if (!fn) continue;
+    const qty = parseFloat(r[qtC])||0;
+    if (qty===0) continue;
+    const md = resolveModel(fn);
+    if (!md) continue;
+    const pt = String(r[ptC]||'').trim();
+    if (!pt) continue;
+    const k = pt+'||'+md;
+    if (!dem[k]) dem[k]={pt,ds:dsC?String(r[dsC]||'').trim():'',mt:mtC?String(r[mtC]||'').trim():'',md,qty:0,n:0};
+    dem[k].qty += Math.abs(qty);
+    dem[k].n++;
+  }
+
+  // Per-bus rates
+  const rates={};
+  for (const [k,d] of Object.entries(dem)) {
+    const pop = popSets[d.md]?popSets[d.md].size:0;
+    if (pop===0) continue;
+    rates[k]={...d, pop, rate:d.qty/pop};
+  }
+
+  // User fleet index
+  const uf=new Map();
+  for (const r of userFleet) {
+    if (uf.has(r.md)) {
+      const e=uf.get(r.md);
+      uf.set(r.md,{qty:e.qty+r.qty, age:(e.age+r.age)/2});
+    } else uf.set(r.md,{qty:r.qty,age:r.age});
+  }
+
+  // Part aggregation
+  const parts={};
+  for (const r of Object.values(rates)) {
+    if (!uf.has(r.md)) continue;
+    const {qty,age}=uf.get(r.md);
+    const cat=classify(r.mt);
+    const aw=ageWeight(cat,age);
+    const ann=r.rate*qty*aw;
+    if (!parts[r.pt]) parts[r.pt]={pt:r.pt,ds:r.ds,mt:r.mt,ann:0,issues:0,mds:new Set(),pops:[],anyLo:false,allLo:true};
+    const p=parts[r.pt];
+    p.ann+=ann; p.issues+=r.n; p.mds.add(r.md); p.pops.push(r.pop);
+    if (r.pop<3) p.anyLo=true;
+    if (r.pop>=3) p.allLo=false;
+  }
+
+  // Output rows
+  const d1=[],flags=[];
+  for (const p of Object.values(parts)) {
+    if (p.ann<=0) continue;
+    const mon=p.ann/12;
+    const buf=(ltDays/365)*p.ann;
+    const d1h=Math.ceil(mon+buf+0.5*mon);
+    const daily=p.ann/365;
+    const mn=Math.max(1,Math.ceil(daily*ltDays*1.5));
+    const mx=mn+Math.ceil(mon);
+    const mc=p.mds.size;
+
+    let conf;
+    if (p.issues<3||p.allLo) conf='Low';
+    else if (p.issues>=10&&mc>=2&&!p.anyLo) conf='High';
+    else conf='Medium';
+
+    const notes=[];
+    if (mc===1) notes.push('Used only on 1 model in your fleet');
+    if (p.issues<10) notes.push('Sparse history ('+p.issues+' issues)');
+    if (p.anyLo) notes.push('Low active population for a contributing model');
+
+    const row={pt:p.pt,ds:p.ds,mt:p.mt,d1h,mn,mx,conf,notes:notes.join('; '),issues:p.issues,mc};
+    d1.push(row);
+    if (conf==='Low') flags.push(row);
+  }
+
+  d1.sort((a,b)=>b.d1h-a.d1h);
+  flags.sort((a,b)=>a.issues-b.issues);
+  return {
+    d1, flags,
+    d1count:d1.length,
+    hi:d1.filter(r=>r.conf==='High').length,
+    med:d1.filter(r=>r.conf==='Medium').length,
+    lo:d1.filter(r=>r.conf==='Low').length
+  };
+}
+
+// ── Workbook ──────────────────────────────────────────────────────────────────
+
+function makeWorkbook(res) {
+  const wb=XLSX.utils.book_new();
+
+  function ws(headers, rows) {
+    const data=[headers,...rows];
+    const s=XLSX.utils.aoa_to_sheet(data);
+    s['!cols']=headers.map(h=>({wch:Math.max(String(h).length+2,14)}));
+    return s;
+  }
+
+  // Sheet 1 — Day One Pack
+  XLSX.utils.book_append_sheet(wb, ws(
+    ['Part','Description','Material Group','Recommended Holding','Confidence','Notes'],
+    res.d1.map(r=>[r.pt,r.ds,r.mt,r.d1h,r.conf,r.notes])
+  ), 'Day One Pack');
+
+  // Sheet 2 — Steady-State MIN/MAX
+  XLSX.utils.book_append_sheet(wb, ws(
+    ['Part','Description','Material Group','MIN','MAX','Confidence'],
+    res.d1.map(r=>[r.pt,r.ds,r.mt,r.mn,r.mx,r.conf])
+  ), 'Steady-State MIN MAX');
+
+  // Sheet 3 — Confidence Flags
+  XLSX.utils.book_append_sheet(wb, ws(
+    ['Part','Description','Total Issues in Source','Models in User Fleet','Recommendation Quality'],
+    res.flags.map(r=>[r.pt,r.ds,r.issues,r.mc,
+      r.issues<3
+        ? 'Only '+r.issues+' issue'+(r.issues===1?'':'s')+' in source data'
+        : 'Derived from low-confidence model rates (<3 active fleet numbers)'])
+  ), 'Confidence Flags');
+
+  return wb;
+}
+</script>
+</body>
+</html>
