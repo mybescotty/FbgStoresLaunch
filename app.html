@@ -141,8 +141,14 @@ let txnReady   = false;
 
 function col(headers, names) {
   const n = h => h.replace(/[\s_\-]/g,'').toLowerCase();
+  // Exact normalized match first
   for (const name of names) {
     const f = headers.find(h => n(h) === n(name));
+    if (f) return f;
+  }
+  // Partial match — header contains candidate keyword (handles "Total Chassis Variant" etc.)
+  for (const name of names) {
+    const f = headers.find(h => n(h).includes(n(name)));
     if (f) return f;
   }
   return null;
@@ -185,7 +191,7 @@ document.getElementById('fleetFile').addEventListener('change', function(e) {
     const fnC  = col(h,['FleetNumber','Fleet','FleetNo','VehicleNumber','Vehicle']);
     const mdC  = col(h,['Model','BusType','ChassisVariant','VehicleType','Type','Variant','BodyType']);
     if (!fnC || !mdC) {
-      setStat('fleetStat','Column not found. Headers: '+h.join(', '),'err');
+      setStat('fleetStat','Could not find '+(fnC?'model':'fleet number')+' column. Headers: '+h.join(', '),'err');
       document.getElementById('fleetBox').className='ubox err';
       return;
     }
