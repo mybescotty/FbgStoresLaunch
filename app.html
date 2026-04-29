@@ -7,59 +7,75 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
+/* First Bus brand colours: magenta #E4007C, navy #1D2B5F */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;font-size:14px;background:#f0f2f5;color:#2c3e50}
-.hdr{background:#1a3a5c;color:#fff;padding:14px 24px}
-.hdr h1{font-size:20px;font-weight:700}
-.hdr p{font-size:12px;opacity:.75;margin-top:3px}
+body{font-family:Arial,sans-serif;font-size:14px;background:#f0f1f5;color:#1D2B5F}
+.hdr{background:#1D2B5F;color:#fff;padding:0;border-bottom:4px solid #E4007C}
+.hdr-inner{max-width:1100px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:16px}
+.hdr-logo{display:flex;align-items:center;gap:10px}
+.hdr-logo .fb-mark{width:38px;height:38px;background:#E4007C;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:#fff;letter-spacing:-1px;flex-shrink:0}
+.hdr-logo .fb-wordmark{font-size:13px;font-weight:700;color:#fff;line-height:1.2}
+.hdr-logo .fb-wordmark span{display:block;font-size:10px;font-weight:400;opacity:.7;letter-spacing:.5px;text-transform:uppercase}
+.hdr-divider{width:1px;height:32px;background:rgba(255,255,255,.25);margin:0 4px}
+.hdr-title h1{font-size:19px;font-weight:700;color:#fff}
+.hdr-title p{font-size:11px;color:rgba(255,255,255,.65);margin-top:2px}
 .wrap{max-width:1100px;margin:20px auto;padding:0 16px}
-.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
-.card h2{font-size:14px;font-weight:700;color:#1a3a5c;border-bottom:2px solid #e8ecf0;padding-bottom:8px;margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(29,43,95,.1)}
+.card h2{font-size:12px;font-weight:700;color:#E4007C;border-bottom:2px solid #f0f1f5;padding-bottom:8px;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.ubox{border:2px dashed #c8d0d8;border-radius:6px;padding:16px;text-align:center;transition:border-color .2s}
+.ubox{border:2px dashed #c8cede;border-radius:6px;padding:16px;text-align:center;transition:border-color .2s,background .2s}
 .ubox.ok{border-color:#27ae60;background:#f0faf4}
 .ubox.err{border-color:#e74c3c;background:#fef0ee}
-.ubox strong{display:block;margin-bottom:6px;font-size:13px}
+.ubox strong{display:block;margin-bottom:6px;font-size:13px;color:#1D2B5F}
 .ubox input[type=file]{display:none}
-.ubtn{display:inline-block;background:#1a3a5c;color:#fff;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px}
-.ubtn:hover{background:#254d7a}
+.ubtn{display:inline-block;background:#E4007C;color:#fff;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700;margin-top:8px;transition:background .15s}
+.ubtn:hover{background:#b8005f}
 .ustat{font-size:12px;margin-top:6px;color:#666;min-height:18px}
 .ustat.ok{color:#27ae60}
 .ustat.err{color:#e74c3c}
 table{width:100%;border-collapse:collapse}
-th{background:#f0f3f7;text-align:left;padding:8px 10px;font-size:12px;font-weight:700;color:#1a3a5c;border-bottom:2px solid #dde2e8;white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid #edf0f3;font-size:13px;vertical-align:middle}
-tr:hover td{background:#fafbfc}
-input[type=number],select{border:1px solid #c8d0d8;border-radius:4px;padding:5px 7px;font-size:13px;width:100%;font-family:Arial,sans-serif}
-input:focus,select:focus{outline:none;border-color:#1a3a5c}
-.btn{padding:7px 16px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-family:Arial,sans-serif;font-weight:600}
-.btn-add{background:#27ae60;color:#fff}
-.btn-add:hover{background:#219a52}
-.btn-del{background:#e74c3c;color:#fff;padding:4px 10px;font-size:12px}
-.btn-del:hover{background:#c0392b}
-.btn-gen{background:#e67e22;color:#fff;font-size:15px;padding:12px 0;width:100%;margin-top:10px;border-radius:6px}
-.btn-gen:hover{background:#ca6f1e}
-.btn-gen:disabled{background:#b5924d;cursor:not-allowed}
+th{background:#f5f6fa;text-align:left;padding:8px 10px;font-size:12px;font-weight:700;color:#1D2B5F;border-bottom:2px solid #E4007C;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #edf0f5;font-size:13px;vertical-align:middle}
+tr:hover td{background:#fafbff}
+input[type=number],select{border:1px solid #c8cede;border-radius:4px;padding:5px 7px;font-size:13px;width:100%;font-family:Arial,sans-serif;color:#1D2B5F}
+input:focus,select:focus{outline:none;border-color:#E4007C;box-shadow:0 0 0 2px rgba(228,0,124,.12)}
+.btn{padding:7px 16px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-family:Arial,sans-serif;font-weight:700}
+.btn-add{background:#1D2B5F;color:#fff}
+.btn-add:hover{background:#2a3d84}
+.btn-del{background:#fff;color:#E4007C;border:1px solid #E4007C;padding:4px 10px;font-size:12px}
+.btn-del:hover{background:#ffeef7}
+.btn-gen{background:#E4007C;color:#fff;font-size:15px;font-weight:700;padding:13px 0;width:100%;margin-top:12px;border-radius:6px;border:none;cursor:pointer;font-family:Arial,sans-serif;transition:background .15s;letter-spacing:.3px}
+.btn-gen:hover{background:#b8005f}
+.btn-gen:disabled{background:#c88aad;cursor:not-allowed}
 .lt-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.lt-row label{font-weight:700;font-size:13px;white-space:nowrap}
+.lt-row label{font-weight:700;font-size:13px;white-space:nowrap;color:#1D2B5F}
 .lt-row input{width:80px}
 .ftotal{text-align:right;font-size:12px;color:#666;margin-top:8px}
-.ftotal strong{color:#1a3a5c;font-size:14px}
+.ftotal strong{color:#E4007C;font-size:14px;font-weight:700}
 .verr{color:#e74c3c;font-size:12px;margin-top:6px}
 .status{padding:12px 16px;border-radius:6px;font-size:13px;margin-top:14px;line-height:1.6}
-.status.info{background:#eaf4ff;color:#1a3a5c;border-left:4px solid #2980b9}
+.status.info{background:#eef0fa;color:#1D2B5F;border-left:4px solid #1D2B5F}
 .status.ok{background:#f0faf4;color:#1a6b3a;border-left:4px solid #27ae60}
 .status.err{background:#fef0ee;color:#a93226;border-left:4px solid #e74c3c}
-.dnl{display:inline-block;margin-top:10px;background:#1a3a5c;color:#fff;padding:9px 20px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:600}
-.dnl:hover{background:#254d7a}
+.dnl{display:inline-block;margin-top:10px;background:#1D2B5F;color:#fff;padding:9px 20px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:700;transition:background .15s}
+.dnl:hover{background:#2a3d84}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <div class="hdr">
-  <h1>Depot Startup MRP</h1>
-  <p>Day One stock planning for new bus depots</p>
+  <div class="hdr-inner">
+    <div class="hdr-logo">
+      <div class="fb-mark">f</div>
+      <div class="fb-wordmark">First Bus<span>Transport Operations</span></div>
+    </div>
+    <div class="hdr-divider"></div>
+    <div class="hdr-title">
+      <h1>Depot Startup MRP</h1>
+      <p>Day One stock planning for new bus depots</p>
+    </div>
+  </div>
 </div>
 <div class="wrap">
 
