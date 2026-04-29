@@ -91,6 +91,22 @@ input:focus,select:focus{outline:none;border-color:#E4007C;box-shadow:0 0 0 2px 
 .step-body strong{color:#1D2B5F;font-size:13px}
 .step-body p{margin-top:4px}
 @media(max-width:720px){.conf-grid{grid-template-columns:1fr}.tab-explain-grid{grid-template-columns:1fr}}
+/* Diagnostics panel */
+.diag-card{background:#fff;border-radius:8px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(29,43,95,.1)}
+.diag-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.diag-box{background:#f5f6fa;border-radius:6px;padding:12px 14px;border-left:3px solid #1D2B5F}
+.diag-box.warn{border-left-color:#f39c12;background:#fffdf5}
+.diag-box.ok{border-left-color:#27ae60;background:#f0faf4}
+.diag-val{font-size:22px;font-weight:700;color:#1D2B5F}
+.diag-lbl{font-size:11px;color:#666;margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.diag-sub{font-size:11px;color:#888;margin-top:4px}
+/* Trend badges */
+.trend-up{color:#27ae60;font-weight:700}
+.trend-dn{color:#e74c3c;font-weight:700}
+.trend-st{color:#888}
+/* Seasonal note */
+.seas-note{font-size:12px;color:#666;background:#ffeef7;border-left:3px solid #E4007C;padding:7px 12px;border-radius:0 4px 4px 0;margin-top:10px}
+@media(max-width:720px){.diag-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -133,7 +149,16 @@ input:focus,select:focus{outline:none;border-color:#E4007C;box-shadow:0 0 0 2px 
     <h2>Depot Builder</h2>
     <div class="lt-row">
       <label for="leadTime">Lead Time (days):</label>
-      <input type="number" id="leadTime" value="5" min="1" max="365">
+      <input type="number" id="leadTime" value="5" min="1" max="365" style="width:80px">
+      <label for="openMonth" style="margin-left:16px">Depot Opening Month:</label>
+      <select id="openMonth" style="width:150px">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
     </div>
     <table>
       <thead>
@@ -436,6 +461,7 @@ function runGenerate() {
   const rows = [...document.querySelectorAll('#fleetBody tr')];
   if (!rows.length) { document.getElementById('verr').textContent='Add at least one bus type row.'; return; }
   const lt = parseInt(document.getElementById('leadTime').value)||5;
+  const openMonth = parseInt(document.getElementById('openMonth').value)||1;
   const userFleet=[];
   for (const tr of rows) {
     const md = tr.querySelector('.bsel').value;
@@ -452,19 +478,24 @@ function runGenerate() {
   out.innerHTML='<div class="status info">Processing — please wait…</div>';
   setTimeout(()=>{
     try {
-      const result = pipeline(userFleet, lt);
+      const result = pipeline(userFleet, lt, openMonth);
       const wb = makeWorkbook(result);
       const wbout = XLSX.write(wb,{bookType:'xlsx',type:'array'});
       const url = URL.createObjectURL(new Blob([wbout],{type:'application/octet-stream'}));
+      const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
       const fname = 'DepotMRP_'+new Date().toISOString().slice(0,10)+'.xlsx';
-      const h = result.d1count, med = result.med, lo = result.lo;
+      const seasNote = result.hasDates
+        ? `<div class="seas-note">&#127777; Seasonal adjustment applied for <strong>${MONTHS[openMonth-1]}</strong> opening — Day One holdings scaled to reflect historical demand in that month.</div>`
+        : '';
       out.innerHTML=`<div class="status ok">
-        ✓ Plan generated &mdash; <strong>${h+med+lo}</strong> parts<br>
+        ✓ Plan generated &mdash; <strong>${result.d1count}</strong> parts<br>
         High confidence: <strong>${result.hi}</strong> &nbsp;|&nbsp;
-        Medium: <strong>${med}</strong> &nbsp;|&nbsp;
-        Low: <strong>${lo}</strong><br>
+        Medium: <strong>${result.med}</strong> &nbsp;|&nbsp;
+        Low: <strong>${result.lo}</strong><br>
         <a class="dnl" href="${url}" download="${fname}">⬇ Download ${fname}</a>
-      </div>`;
+        ${seasNote}
+      </div>
+      ${buildDiagHtml(result.diag)}`;
     } catch(e) {
       out.innerHTML=`<div class="status err">Error: ${e.message}</div>`;
       console.error(e);
@@ -476,33 +507,59 @@ function runGenerate() {
 
 // ── Core calculation ──────────────────────────────────────────────────────────
 
-function pipeline(userFleet, ltDays) {
-  const {ttC,qtC,fnC,ptC,dsC,mtC} = txnCols;
+function parseYear(s)  { const d=new Date(s); return isNaN(d)?null:d.getFullYear(); }
+function parseMonth(s) { const d=new Date(s); return isNaN(d)?null:d.getMonth()+1; } // 1-12
+
+function pipeline(userFleet, ltDays, openMonth) {
+  const {ttC,qtC,fnC,ptC,dsC,mtC,dtC} = txnCols;
+
+  // Diagnostics counters
+  const diag={total:0,noFleet:0,nonBus:0,unresolvable:0,sttk:0,resolved:0};
 
   // Active populations
   const popSets={};
-  for (const r of txnRows) {
-    if (String(r[ttC]||'').trim().toUpperCase()!=='I') continue;
-    const fn = fnC ? String(r[fnC]||'').trim() : '';
-    if (!fn) continue;
-    const md = resolveModel(fn);
-    if (!md) continue;
-    if (!popSets[md]) popSets[md]=new Set();
-    popSets[md].add(fn);
-  }
+
+  // Per-part monthly demand [0..11] and yearly demand for trend
+  const partMonthly={};  // pt -> [12]
+  const partYearly={};   // pt -> {year:qty}
+  let hasDates=false;
 
   // Demand aggregation
   const dem={};
+
   for (const r of txnRows) {
     if (String(r[ttC]||'').trim().toUpperCase()!=='I') continue;
+    diag.total++;
+
     const fn = fnC ? String(r[fnC]||'').trim() : '';
-    if (!fn) continue;
+    if (!fn) { diag.noFleet++; continue; }
+
+    const prefix = fn.slice(0,3);
+    if (NON_BUS.has(prefix)) { diag.nonBus++; continue; }
+
+    const md = resolveModel(fn);
+    if (!md) { diag.unresolvable++; continue; }
+
     const qty = parseFloat(r[qtC])||0;
     if (qty===0) continue;
-    const md = resolveModel(fn);
-    if (!md) continue;
+    if (qty<0) diag.sttk++;
+    diag.resolved++;
+
+    // Active population
+    if (!popSets[md]) popSets[md]=new Set();
+    popSets[md].add(fn);
+
     const pt = String(r[ptC]||'').trim();
     if (!pt) continue;
+
+    // Monthly & yearly tracking
+    const dateStr = dtC ? r[dtC] : null;
+    const mo = dateStr ? parseMonth(dateStr) : null;
+    const yr = dateStr ? parseYear(dateStr)  : null;
+    if (mo) { hasDates=true; if (!partMonthly[pt]) partMonthly[pt]=new Array(12).fill(0); partMonthly[pt][mo-1]+=Math.abs(qty); }
+    if (yr) { if (!partYearly[pt])  partYearly[pt]={}; partYearly[pt][yr]=(partYearly[pt][yr]||0)+Math.abs(qty); }
+
+    // Demand
     const k = pt+'||'+md;
     if (!dem[k]) dem[k]={pt,ds:dsC?String(r[dsC]||'').trim():'',mt:mtC?String(r[mtC]||'').trim():'',md,qty:0,n:0};
     dem[k].qty += Math.abs(qty);
@@ -520,10 +577,8 @@ function pipeline(userFleet, ltDays) {
   // User fleet index
   const uf=new Map();
   for (const r of userFleet) {
-    if (uf.has(r.md)) {
-      const e=uf.get(r.md);
-      uf.set(r.md,{qty:e.qty+r.qty, age:(e.age+r.age)/2});
-    } else uf.set(r.md,{qty:r.qty,age:r.age});
+    if (uf.has(r.md)) { const e=uf.get(r.md); uf.set(r.md,{qty:e.qty+r.qty,age:(e.age+r.age)/2}); }
+    else uf.set(r.md,{qty:r.qty,age:r.age});
   }
 
   // Part aggregation
@@ -534,24 +589,51 @@ function pipeline(userFleet, ltDays) {
     const cat=classify(r.mt);
     const aw=ageWeight(cat,age);
     const ann=r.rate*qty*aw;
-    if (!parts[r.pt]) parts[r.pt]={pt:r.pt,ds:r.ds,mt:r.mt,ann:0,issues:0,mds:new Set(),pops:[],anyLo:false,allLo:true};
+    if (!parts[r.pt]) parts[r.pt]={pt:r.pt,ds:r.ds,mt:r.mt,ann:0,issues:0,mds:new Set(),anyLo:false,allLo:true};
     const p=parts[r.pt];
-    p.ann+=ann; p.issues+=r.n; p.mds.add(r.md); p.pops.push(r.pop);
+    p.ann+=ann; p.issues+=r.n; p.mds.add(r.md);
     if (r.pop<3) p.anyLo=true;
     if (r.pop>=3) p.allLo=false;
+  }
+
+  // Trend helper
+  function calcTrend(pt) {
+    const ymap = partYearly[pt];
+    if (!ymap) return {label:'—',tag:'trend-st'};
+    const years = Object.keys(ymap).map(Number).sort();
+    if (years.length<2) return {label:'— (1 yr)',tag:'trend-st'};
+    const last=ymap[years[years.length-1]], prev=ymap[years[years.length-2]];
+    if (prev===0) return {label:'— (no prev)',tag:'trend-st'};
+    const ratio=last/prev;
+    if (ratio>1.25) return {label:'↑ Rising',tag:'trend-up'};
+    if (ratio<0.75) return {label:'↓ Falling',tag:'trend-dn'};
+    return {label:'→ Stable',tag:'trend-st'};
+  }
+
+  // Seasonal multiplier helper
+  function seasMult(pt) {
+    if (!hasDates||!partMonthly[pt]) return 1.0;
+    const arr=partMonthly[pt];
+    const total=arr.reduce((a,b)=>a+b,0);
+    if (total===0) return 1.0;
+    const avg=total/12;
+    const monthVal=arr[openMonth-1];
+    return avg>0 ? monthVal/avg : 1.0;
   }
 
   // Output rows
   const d1=[],flags=[];
   for (const p of Object.values(parts)) {
     if (p.ann<=0) continue;
-    const mon=p.ann/12;
+    const sm=seasMult(p.pt);
+    const mon=(p.ann/12)*sm;          // seasonal monthly demand
     const buf=(ltDays/365)*p.ann;
     const d1h=Math.ceil(mon+buf+0.5*mon);
     const daily=p.ann/365;
     const mn=Math.max(1,Math.ceil(daily*ltDays*1.5));
-    const mx=mn+Math.ceil(mon);
+    const mx=mn+Math.ceil(p.ann/12);
     const mc=p.mds.size;
+    const trend=calcTrend(p.pt);
 
     let conf;
     if (p.issues<3||p.allLo) conf='Low';
@@ -562,8 +644,10 @@ function pipeline(userFleet, ltDays) {
     if (mc===1) notes.push('Used only on 1 model in your fleet');
     if (p.issues<10) notes.push('Sparse history ('+p.issues+' issues)');
     if (p.anyLo) notes.push('Low active population for a contributing model');
+    if (hasDates&&sm>1.15) notes.push('Seasonally adjusted upward for opening month');
+    if (hasDates&&sm<0.85) notes.push('Seasonally adjusted downward for opening month');
 
-    const row={pt:p.pt,ds:p.ds,mt:p.mt,d1h,mn,mx,conf,notes:notes.join('; '),issues:p.issues,mc};
+    const row={pt:p.pt,ds:p.ds,mt:p.mt,d1h,mn,mx,conf,trend,notes:notes.join('; '),issues:p.issues,mc,sm};
     d1.push(row);
     if (conf==='Low') flags.push(row);
   }
@@ -571,12 +655,31 @@ function pipeline(userFleet, ltDays) {
   d1.sort((a,b)=>b.d1h-a.d1h);
   flags.sort((a,b)=>a.issues-b.issues);
   return {
-    d1, flags,
+    d1, flags, diag, hasDates,
     d1count:d1.length,
     hi:d1.filter(r=>r.conf==='High').length,
     med:d1.filter(r=>r.conf==='Medium').length,
     lo:d1.filter(r=>r.conf==='Low').length
   };
+}
+
+// ── Diagnostics HTML builder ──────────────────────────────────────────────────
+
+function buildDiagHtml(d) {
+  const pct=(n,tot)=>tot>0?' ('+Math.round(n/tot*100)+'%)':'';
+  return `<div class="diag-card" style="margin-top:14px">
+    <h2 style="font-size:12px;font-weight:700;color:#E4007C;border-bottom:2px solid #f0f1f5;padding-bottom:8px;margin-bottom:0;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;display:flex;justify-content:space-between" onclick="toggleDiag(this)">
+      Data Diagnostics <span style="font-size:16px;font-weight:400;transition:transform .25s">&#9660;</span>
+    </h2>
+    <div class="diag-grid" id="diagBody">
+      <div class="diag-box ok"><div class="diag-val">${d.resolved.toLocaleString()}</div><div class="diag-lbl">Transactions resolved</div><div class="diag-sub">${pct(d.resolved,d.total).replace(' ','').replace('(','').replace(')','') || '—'} of ${d.total.toLocaleString()} issue rows</div></div>
+      <div class="diag-box warn"><div class="diag-val">${d.noFleet.toLocaleString()}</div><div class="diag-lbl">No fleet number</div><div class="diag-sub">Cannot attribute to a bus type — excluded</div></div>
+      <div class="diag-box warn"><div class="diag-val">${d.nonBus.toLocaleString()}</div><div class="diag-lbl">Non-bus vehicles</div><div class="diag-sub">Vans, forklifts, support fleet — excluded</div></div>
+      <div class="diag-box warn"><div class="diag-val">${d.unresolvable.toLocaleString()}</div><div class="diag-lbl">Unresolvable prefix</div><div class="diag-sub">Fleet number prefix not in reference — excluded</div></div>
+      <div class="diag-box"><div class="diag-val">${d.sttk.toLocaleString()}</div><div class="diag-lbl">STTK adjustments</div><div class="diag-sub">Negative rows included at absolute value</div></div>
+      <div class="diag-box"><div class="diag-val">${Math.round(d.resolved/Math.max(d.total,1)*100)}%</div><div class="diag-lbl">Resolution rate</div><div class="diag-sub">of all issue transactions fed into demand</div></div>
+    </div>
+  </div>`;
 }
 
 // ── Workbook ──────────────────────────────────────────────────────────────────
@@ -593,14 +696,14 @@ function makeWorkbook(res) {
 
   // Sheet 1 — Day One Pack
   XLSX.utils.book_append_sheet(wb, ws(
-    ['Part','Description','Material Group','Recommended Holding','Confidence','Notes'],
-    res.d1.map(r=>[r.pt,r.ds,r.mt,r.d1h,r.conf,r.notes])
+    ['Part','Description','Material Group','Recommended Holding','Confidence','Trend','Notes'],
+    res.d1.map(r=>[r.pt,r.ds,r.mt,r.d1h,r.conf,r.trend.label,r.notes])
   ), 'Day One Pack');
 
   // Sheet 2 — Steady-State MIN/MAX
   XLSX.utils.book_append_sheet(wb, ws(
-    ['Part','Description','Material Group','MIN','MAX','Confidence'],
-    res.d1.map(r=>[r.pt,r.ds,r.mt,r.mn,r.mx,r.conf])
+    ['Part','Description','Material Group','MIN','MAX','Confidence','Trend'],
+    res.d1.map(r=>[r.pt,r.ds,r.mt,r.mn,r.mx,r.conf,r.trend.label])
   ), 'Steady-State MIN MAX');
 
   // Sheet 3 — Confidence Flags
@@ -615,7 +718,15 @@ function makeWorkbook(res) {
   return wb;
 }
 
-// ── Appendix toggle ───────────────────────────────────────────────────────────
+// ── Toggle helpers ────────────────────────────────────────────────────────────
+
+function toggleDiag(hdr) {
+  const body = document.getElementById('diagBody');
+  const chev = hdr.querySelector('span');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'grid';
+  chev.style.transform = open ? '' : 'rotate(180deg)';
+}
 
 function toggleAppendix() {
   const body = document.getElementById('appendixBody');
