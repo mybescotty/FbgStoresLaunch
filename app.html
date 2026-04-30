@@ -514,7 +514,7 @@ function pipeline(userFleet, ltDays, openMonth) {
   const {ttC,qtC,fnC,ptC,dsC,mtC,dtC} = txnCols;
 
   // Diagnostics counters
-  const diag={total:0,noFleet:0,nonBus:0,unresolvable:0,sttk:0,resolved:0};
+  const diag={total:0,noFleet:0,nonBus:0,unresolvable:0,returns:0,depotReturn:0,resolved:0};
 
   // Active populations
   const popSets={};
@@ -534,36 +534,43 @@ function pipeline(userFleet, ltDays, openMonth) {
     const fn = fnC ? String(r[fnC]||'').trim() : '';
     if (!fn) { diag.noFleet++; continue; }
 
+    const qty = parseFloat(r[qtC])||0;
+    if (qty===0) continue;
+
+    // Negative = return to stock from a bus.
+    // 4-digit fleet number means the return is to a depot store, not from a bus — disregard.
+    if (qty < 0 && /^\d{4}$/.test(fn)) { diag.depotReturn++; continue; }
+
     const prefix = fn.slice(0,3);
     if (NON_BUS.has(prefix)) { diag.nonBus++; continue; }
 
     const md = resolveModel(fn);
     if (!md) { diag.unresolvable++; continue; }
 
-    const qty = parseFloat(r[qtC])||0;
-    if (qty===0) continue;
-    if (qty<0) diag.sttk++;
-    diag.resolved++;
+    if (qty < 0) diag.returns++;
+    else diag.resolved++;
 
-    // Active population
-    if (!popSets[md]) popSets[md]=new Set();
-    popSets[md].add(fn);
+    // Active population — only positive issues drive population count
+    if (qty > 0) {
+      if (!popSets[md]) popSets[md]=new Set();
+      popSets[md].add(fn);
+    }
 
     const pt = String(r[ptC]||'').trim();
     if (!pt) continue;
 
-    // Monthly & yearly tracking
+    // Monthly & yearly tracking (signed — returns reduce net consumption profile)
     const dateStr = dtC ? r[dtC] : null;
     const mo = dateStr ? parseMonth(dateStr) : null;
     const yr = dateStr ? parseYear(dateStr)  : null;
-    if (mo) { hasDates=true; if (!partMonthly[pt]) partMonthly[pt]=new Array(12).fill(0); partMonthly[pt][mo-1]+=Math.abs(qty); }
-    if (yr) { if (!partYearly[pt])  partYearly[pt]={}; partYearly[pt][yr]=(partYearly[pt][yr]||0)+Math.abs(qty); }
+    if (mo) { hasDates=true; if (!partMonthly[pt]) partMonthly[pt]=new Array(12).fill(0); partMonthly[pt][mo-1]+=qty; }
+    if (yr) { if (!partYearly[pt]) partYearly[pt]={}; partYearly[pt][yr]=(partYearly[pt][yr]||0)+qty; }
 
-    // Demand
+    // Demand — signed qty: issues add, returns subtract
     const k = pt+'||'+md;
     if (!dem[k]) dem[k]={pt,ds:dsC?String(r[dsC]||'').trim():'',mt:mtC?String(r[mtC]||'').trim():'',md,qty:0,n:0};
-    dem[k].qty += Math.abs(qty);
-    dem[k].n++;
+    dem[k].qty += qty;
+    if (qty > 0) dem[k].n++;  // only positive issues count toward confidence scoring
   }
 
   // Per-bus rates
@@ -672,12 +679,12 @@ function buildDiagHtml(d) {
       Data Diagnostics <span style="font-size:16px;font-weight:400;transition:transform .25s">&#9660;</span>
     </h2>
     <div class="diag-grid" id="diagBody">
-      <div class="diag-box ok"><div class="diag-val">${d.resolved.toLocaleString()}</div><div class="diag-lbl">Transactions resolved</div><div class="diag-sub">${pct(d.resolved,d.total).replace(' ','').replace('(','').replace(')','') || '—'} of ${d.total.toLocaleString()} issue rows</div></div>
+      <div class="diag-box ok"><div class="diag-val">${d.resolved.toLocaleString()}</div><div class="diag-lbl">Issues resolved</div><div class="diag-sub">of ${d.total.toLocaleString()} total 'I' rows processed</div></div>
+      <div class="diag-box"><div class="diag-val">${d.returns.toLocaleString()}</div><div class="diag-lbl">Returns to stock</div><div class="diag-sub">Negative qty from a bus — subtracted from demand</div></div>
+      <div class="diag-box warn"><div class="diag-val">${d.depotReturn.toLocaleString()}</div><div class="diag-lbl">Depot returns</div><div class="diag-sub">4-digit fleet number — not bus-attributable, excluded</div></div>
       <div class="diag-box warn"><div class="diag-val">${d.noFleet.toLocaleString()}</div><div class="diag-lbl">No fleet number</div><div class="diag-sub">Cannot attribute to a bus type — excluded</div></div>
       <div class="diag-box warn"><div class="diag-val">${d.nonBus.toLocaleString()}</div><div class="diag-lbl">Non-bus vehicles</div><div class="diag-sub">Vans, forklifts, support fleet — excluded</div></div>
       <div class="diag-box warn"><div class="diag-val">${d.unresolvable.toLocaleString()}</div><div class="diag-lbl">Unresolvable prefix</div><div class="diag-sub">Fleet number prefix not in reference — excluded</div></div>
-      <div class="diag-box"><div class="diag-val">${d.sttk.toLocaleString()}</div><div class="diag-lbl">STTK adjustments</div><div class="diag-sub">Negative rows included at absolute value</div></div>
-      <div class="diag-box"><div class="diag-val">${Math.round(d.resolved/Math.max(d.total,1)*100)}%</div><div class="diag-lbl">Resolution rate</div><div class="diag-sub">of all issue transactions fed into demand</div></div>
     </div>
   </div>`;
 }
